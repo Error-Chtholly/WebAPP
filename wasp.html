@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>互动电子马蜂</title>
+    <style>
+        body {
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-color: #87CEEB;
+            font-family: Arial, sans-serif;
+            overflow: hidden;
+        }
+        
+        #game-container {
+            position: relative;
+            width: 100%;
+            height: 100%;
+        }
+        
+        #wasp-container {
+            position: absolute;
+            width: 150px;
+            height: 150px;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        
+        #wasp {
+            width: 100%;
+            height: 100%;
+        }
+        
+        #target {
+            position: absolute;
+            width: 50px;
+            height: 50px;
+            background-color: red;
+            border-radius: 50%;
+            z-index: 5;
+        }
+        
+        #score-display {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            font-size: 24px;
+            color: white;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+            z-index: 20;
+        }
+        
+        #controls {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 20;
+            display: flex;
+            gap: 20px;
+        }
+        
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            transition: background-color 0.3s;
+        }
+        
+        button:hover {
+            background-color: #45a049;
+        }
+        
+        #sting-btn {
+            background-color: #ff4757;
+        }
+        
+        #sting-btn:hover {
+            background-color: #e84118;
+        }
+        
+        /* 翅膀动画 */
+        .wing {
+            animation: flap 0.1s infinite alternate;
+            transform-origin: center;
+        }
+        
+        @keyframes flap {
+            from {
+                transform: rotateY(0deg);
+            }
+            to {
+                transform: rotateY(60deg);
+            }
+        }
+        
+        /* 蛰击动画 */
+        .sting-animation {
+            animation: sting 0.3s ease-in-out;
+        }
+        
+        @keyframes sting {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-20px); }
+        }
+    </style>
+</head>
+<body>
+    <div id="game-container">
+        <div id="wasp-container">
+            <svg id="wasp" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">
+                <!-- 身体部分 -->
+                <path d="M100,50 Q120,60 120,80 Q120,100 100,110 Q80,100 80,80 Q80,60 100,50Z" fill="#FFD700" stroke="#000" stroke-width="2"/>
+                <path d="M100,110 Q120,120 120,140 Q120,160 100,170 Q80,160 80,140 Q80,120 100,110Z" fill="#000" stroke="#000" stroke-width="2"/>
+                <path d="M100,170 Q120,180 120,200 Q100,190 80,200 Q80,180 100,170Z" fill="#FFD700" stroke="#000" stroke-width="2"/>
+                
+                <!-- 头部 -->
+                <circle cx="100" cy="40" r="15" fill="#000"/>
+                <circle cx="95" cy="37" r="3" fill="#FFF"/>
+                <circle cx="105" cy="37" r="3" fill="#FFF"/>
+                
+                <!-- 触角 -->
+                <path d="M90,30 Q85,20 80,15" stroke="#000" stroke-width="2" fill="none"/>
+                <path d="M110,30 Q115,20 120,15" stroke="#000" stroke-width="2" fill="none"/>
+                
+                <!-- 翅膀 -->
+                <path class="wing" d="M80,50 Q70,30 90,20 Q110,30 120,50" fill="#7EC0EE" fill-opacity="0.6" stroke="#000" stroke-width="1"/>
+                <path class="wing" d="M80,70 Q70,50 90,40 Q110,50 120,70" fill="#7EC0EE" fill-opacity="0.6" stroke="#000" stroke-width="1"/>
+                
+                <!-- 螫针 (默认隐藏) -->
+                <path id="stinger" d="M100,195 L100,205" stroke="#FF0000" stroke-width="3" stroke-linecap="round" opacity="0"/>
+            </svg>
+        </div>
+        
+        <div id="target"></div>
+        <div id="score-display">分数: 0</div>
+        
+        <div id="controls">
+            <button id="sting-btn">蛰击!</button>
+            <button id="fly-btn">飞行模式</button>
+        </div>
+    </div>
+
+    <script>
+        const waspContainer = document.getElementById('wasp-container');
+        const wasp = document.getElementById('wasp');
+        const stinger = document.getElementById('stinger');
+        const target = document.getElementById('target');
+        const scoreDisplay = document.getElementById('score-display');
+        const stingBtn = document.getElementById('sting-btn');
+        const flyBtn = document.getElementById('fly-btn');
+        
+        let score = 0;
+        let isFlying = false;
+        let flightInterval;
+        let targetInterval;
+        let stingCooldown = false;
+        
+        // 初始化游戏
+        function initGame() {
+            // 随机放置目标
+            moveTarget();
+            
+            // 设置马蜂初始位置
+            waspContainer.style.left = '50%';
+            waspContainer.style.top = '50%';
+            waspContainer.style.transform = 'translate(-50%, -50%)';
+            
+            // 添加事件监听器
+            document.addEventListener('keydown', handleKeyPress);
+            stingBtn.addEventListener('click', performSting);
+            flyBtn.addEventListener('click', toggleFlight);
+            
+            // 触摸支持
+            waspContainer.addEventListener('touchstart', handleTouchStart);
+            waspContainer.addEventListener('touchmove', handleTouchMove);
+        }
+        
+        // 移动目标到随机位置
+        function moveTarget() {
+            const container = document.getElementById('game-container');
+            const maxX = container.clientWidth - target.clientWidth;
+            const maxY = container.clientHeight - target.clientHeight;
+            
+            const randomX = Math.floor(Math.random() * maxX);
+            const randomY = Math.floor(Math.random() * maxY);
+            
+            target.style.left = randomX + 'px';
+            target.style.top = randomY + 'px';
+            
+            // 设置目标自动移动
+            clearInterval(targetInterval);
+            targetInterval = setInterval(() => {
+                moveTarget();
+            }, 3000);
+        }
+        
+        // 键盘控制
+        function handleKeyPress(e) {
+            const speed = 20;
+            const currentLeft = parseInt(waspContainer.style.left) || 0;
+            const currentTop = parseInt(waspContainer.style.top) || 0;
+            
+            switch(e.key) {
+                case 'ArrowUp':
+                    waspContainer.style.top = Math.max(0, currentTop - speed) + 'px';
+                    break;
+                case 'ArrowDown':
+                    waspContainer.style.top = Math.min(window.innerHeight - waspContainer.clientHeight, currentTop + speed) + 'px';
+                    break;
+                case 'ArrowLeft':
+                    waspContainer.style.left = Math.max(0, currentLeft - speed) + 'px';
+                    wasp.style.transform = 'scaleX(-1)';
+                    break;
+                case 'ArrowRight':
+                    waspContainer.style.left = Math.min(window.innerWidth - waspContainer.clientWidth, currentLeft + speed) + 'px';
+                    wasp.style.transform = 'scaleX(1)';
+                    break;
+                case ' ':
+                    performSting();
+                    break;
+            }
+            
+            checkCollision();
+        }
+        
+        // 触摸控制
+        let touchStartX, touchStartY;
+        
+        function handleTouchStart(e) {
+            touchStartX = e.touches[0].clientX;
+            touchStartY = e.touches[0].clientY;
+            e.preventDefault();
+        }
+        
+        function handleTouchMove(e) {
+            if (!touchStartX || !touchStartY) return;
+            
+            const touchX = e.touches[0].clientX;
+            const touchY = e.touches[0].clientY;
+            
+            const deltaX = touchX - touchStartX;
+            const deltaY = touchY - touchStartY;
+            
+            const currentLeft = parseInt(waspContainer.style.left) || 0;
+            const currentTop = parseInt(waspContainer.style.top) || 0;
+            
+            waspContainer.style.left = Math.max(0, Math.min(window.innerWidth - waspContainer.clientWidth, currentLeft + deltaX)) + 'px';
+            waspContainer.style.top = Math.max(0, Math.min(window.innerHeight - waspContainer.clientHeight, currentTop + deltaY)) + 'px';
+            
+            touchStartX = touchX;
+            touchStartY = touchY;
+            
+            checkCollision();
+            e.preventDefault();
+        }
+        
+        // 蛰击功能
+        function performSting() {
+            if (stingCooldown) return;
+            
+            // 添加蛰击动画
+            waspContainer.classList.add('sting-animation');
+            
+            // 显示螫针
+            stinger.style.opacity = '1';
+            
+            // 检查是否击中目标
+            if (checkCollision(true)) {
+                score += 10;
+                scoreDisplay.textContent = `分数: ${score}`;
+                
+                // 目标被击中效果
+                target.style.backgroundColor = 'yellow';
+                setTimeout(() => {
+                    target.style.backgroundColor = 'red';
+                    moveTarget();
+                }, 500);
+            }
+            
+            // 重置动画
+            setTimeout(() => {
+                waspContainer.classList.remove('sting-animation');
+                stinger.style.opacity = '0';
+            }, 500);
+            
+            // 冷却时间
+            stingCooldown = true;
+            setTimeout(() => {
+                stingCooldown = false;
+            }, 500);
+        }
+        
+        // 检查碰撞
+        function checkCollision(isSting = false) {
+            const waspRect = waspContainer.getBoundingClientRect();
+            const targetRect = target.getBoundingClientRect();
+            
+            const collision = !(
+                waspRect.right < targetRect.left || 
+                waspRect.left > targetRect.right || 
+                waspRect.bottom < targetRect.top || 
+                waspRect.top > targetRect.bottom
+            );
+            
+            if (collision && isSting) {
+                return true;
+            }
+            
+            return false;
+        }
+        
+        // 飞行模式
+        function toggleFlight() {
+            if (isFlying) {
+                clearInterval(flightInterval);
+                flyBtn.textContent = '飞行模式';
+                isFlying = false;
+            } else {
+                flyBtn.textContent = '停止飞行';
+                isFlying = true;
+                
+                flightInterval = setInterval(() => {
+                    const currentLeft = parseInt(waspContainer.style.left) || 0;
+                    const currentTop = parseInt(waspContainer.style.top) || 0;
+                    
+                    const randomX = Math.random() * 20 - 10;
+                    const randomY = Math.random() * 20 - 10;
+                    
+                    waspContainer.style.left = Math.max(0, Math.min(window.innerWidth - waspContainer.clientWidth, currentLeft + randomX)) + 'px';
+                    waspContainer.style.top = Math.max(0, Math.min(window.innerHeight - waspContainer.clientHeight, currentTop + randomY)) + 'px';
+                    
+                    checkCollision();
+                }, 100);
+            }
+        }
+        
+        // 初始化游戏
+        window.onload = initGame;
+    </script>
+</body>
+</html>
